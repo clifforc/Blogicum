@@ -1,12 +1,36 @@
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import models
-from .managers import PublishedPostManager
+from django.db.models import Count
+from django.utils import timezone
 
 User = get_user_model()
 
 
-class BaseModel(models.Model):
+class PostQuerySet(models.QuerySet):
+    def published(self):
+        return self.filter(
+            is_published=True,
+            pub_date__lt=timezone.now(),
+            category__is_published=True
+        ).select_related(
+            'location',
+            'category',
+            'author',
+        ).annotate(
+            comment_count=Count('comments')
+        ).order_by('-pub_date')
+
+
+class PublishedPostManager(models.Manager):
+    def get_queryset(self):
+        return PostQuerySet(self.model, using=self._db)
+
+    def published(self):
+        return self.get_queryset().published()
+
+
+class PublishedAndCreatedAtModel(models.Model):
     is_published = models.BooleanField(
         default=True,
         verbose_name='Опубликовано',
@@ -22,7 +46,7 @@ class BaseModel(models.Model):
         ordering = ('created_at', )
 
 
-class Category(BaseModel):
+class Category(PublishedAndCreatedAtModel):
     title = models.CharField(
         max_length=settings.MAX_FIELD_LENGTH,
         verbose_name='Заголовок'
@@ -43,7 +67,7 @@ class Category(BaseModel):
         return self.title[:settings.REPRESENTATION_LENGTH]
 
 
-class Location(BaseModel):
+class Location(PublishedAndCreatedAtModel):
     name = models.CharField(
         max_length=settings.MAX_FIELD_LENGTH,
         verbose_name='Название места'
@@ -57,7 +81,7 @@ class Location(BaseModel):
         return self.name[:settings.REPRESENTATION_LENGTH]
 
 
-class Post(BaseModel):
+class Post(PublishedAndCreatedAtModel):
     title = models.CharField(
         max_length=settings.MAX_FIELD_LENGTH,
         verbose_name='Заголовок'
@@ -89,6 +113,11 @@ class Post(BaseModel):
 
     objects = PublishedPostManager()
 
+    image = models.ImageField(
+        verbose_name='Картинка у публикации',
+        blank=True
+    )
+
     class Meta:
         default_related_name = 'posts'
         verbose_name = 'публикация'
@@ -97,3 +126,29 @@ class Post(BaseModel):
 
     def __str__(self) -> str:
         return self.title[:settings.REPRESENTATION_LENGTH]
+
+
+class Comment(PublishedAndCreatedAtModel):
+    author = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        verbose_name='Автор комментария',
+        related_name='comments',
+    )
+    post = models.ForeignKey(
+        Post,
+        on_delete=models.CASCADE,
+        verbose_name='Комментируемый пост',
+        related_name='comments',
+    )
+    text = models.TextField(
+        verbose_name='Текст комментария'
+    )
+
+    class Meta:
+        verbose_name = 'комментарий'
+        verbose_name_plural = 'Комментарии'
+        ordering = ('created_at',)
+
+    def __str__(self):
+        return self.text[:settings.REPRESENTATION_LENGTH]
