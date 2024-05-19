@@ -35,11 +35,53 @@ class PostDetailView(LoginRequiredMixin, DetailView):
         return context
 
     def get_object(self, queryset=None):
-        posts = Post.objects.filter(
-            Q(is_published=True, category__is_published=True,
-              pub_date__lt=timezone.now()) | Q(author=self.request.user))
-
+        published_posts = Post.objects.published()
+        user_posts = Post.objects.filter(author=self.request.user)
+        posts = published_posts | user_posts
         return get_object_or_404(posts, pk=self.kwargs['post_id'])
+
+
+class PostMixin:
+    model = Post
+    form_class = PostForm
+    template_name = 'blog/create.html'
+    pk_url_kwarg = 'post_id'
+
+
+class PostCreateView(PostMixin, LoginRequiredMixin, CreateView):
+    def form_valid(self, form):
+        form.instance.author = self.request.user
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse('blog:profile',
+                       kwargs={'username': self.request.user.username})
+
+
+class PostUpdateView(PostMixin, UserPassesTestMixin, UpdateView):
+
+    def test_func(self):
+        return self.get_object().author == self.request.user
+
+    def handle_no_permission(self):
+        post_id = self.kwargs.get(self.pk_url_kwarg)
+        return redirect('blog:post_detail', post_id=post_id)
+
+    def get_success_url(self):
+        return reverse_lazy('blog:post_detail',
+                            kwargs={'post_id': self.object.id})
+
+
+class PostDeleteView(PostMixin, UserPassesTestMixin, DeleteView):
+
+    def test_func(self):
+        return self.get_object().author == self.request.user
+
+    def get_success_url(self):
+        return reverse(
+            'blog:profile',
+            kwargs={'username': self.request.user.username}
+        )
 
 
 class CategoryListView(ListView):
@@ -107,63 +149,6 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
     def get_success_url(self):
         return reverse_lazy('blog:profile',
                             kwargs={'username': self.request.user.username})
-
-
-class PostMixin:
-    model = Post
-    form_class = PostForm
-    template_name = 'blog/create.html'
-    pk_url_kwarg = 'post_id'
-
-
-class PostCreateView(PostMixin, LoginRequiredMixin, CreateView):
-    def form_valid(self, form):
-        form.instance.author = self.request.user
-        return super().form_valid(form)
-
-    def get_success_url(self):
-        return reverse('blog:profile',
-                       kwargs={'username': self.request.user.username})
-
-
-class PostUpdateView(PostMixin, UserPassesTestMixin, UpdateView):
-
-    def test_func(self):
-        return self.get_object().author == self.request.user
-
-    def dispatch(self, request, *args, **kwargs):
-        instance = get_object_or_404(Post, pk=kwargs['post_id'])
-        if instance.author != request.user:
-            return redirect(reverse('blog:post_detail', kwargs={'post_id': instance.pk}))
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_success_url(self):
-        return reverse_lazy('blog:post_detail',
-                            kwargs={'post_id': self.object.id})
-
-
-class PostDeleteView(PostMixin, UserPassesTestMixin, DeleteView):
-
-    def test_func(self):
-        return self.get_object().author == self.request.user
-
-    def dispatch(self, request, *args, **kwargs):
-        instance = get_object_or_404(Post, pk=kwargs['post_id'])
-        if instance.author != request.user:
-            return redirect('blog:index')
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        form = PostForm(instance=self.object)
-        context['form'] = form
-        return context
-
-    def get_success_url(self):
-        return reverse(
-            'blog:profile',
-            kwargs={'username': self.request.user.username}
-        )
 
 
 class CommentCreateView(LoginRequiredMixin, CreateView):
