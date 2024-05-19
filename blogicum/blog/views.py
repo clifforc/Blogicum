@@ -195,4 +195,3 @@ class CommentDeleteView(UserPassesTestMixin, CommentMixin, DeleteView):
     def test_func(self):
         comment = self.get_object()
         return self.request.user == comment.author
-
