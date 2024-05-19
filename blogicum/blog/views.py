@@ -1,5 +1,5 @@
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.db.models import Count, Q
+from django.db.models import Count
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.conf import settings
