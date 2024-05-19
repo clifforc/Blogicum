@@ -13,12 +13,6 @@ from .forms import PostForm, CommentForm, ProfileForm
 from .models import Post, Category, User, Comment
 
 
-# class OnlyAuthorMixin(UserPassesTestMixin):
-#     def test_func(self):
-#         obj = self.get_object()
-#         return obj.author == self.request.user
-
-
 class PostListView(ListView):
     model = Post
     template_name = 'blog/index.html'
@@ -46,17 +40,6 @@ class PostDetailView(LoginRequiredMixin, DetailView):
               pub_date__lt=timezone.now()) | Q(author=self.request.user))
 
         return get_object_or_404(posts, pk=self.kwargs['post_id'])
-
-    # def get_object(self, *args, **kwargs):
-    #     post = super().get_object(*args, **kwargs)
-    #     if post.author != self.request.user:
-    #         return get_object_or_404(
-    #             Post.objects.filter(
-    #                 is_published=True,
-    #                 pub_date__lte=timezone.now()),
-    #             pk=self.kwargs['post_id']
-    #         )
-    #     return post
 
 
 class CategoryListView(ListView):
@@ -117,13 +100,6 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
     model = User
     template_name = 'blog/user.html'
     form_class = ProfileForm
-
-    # def dispatch(self, request, *args, **kwargs):
-    #     if self.request.user.is_authenticated:
-    #         self.kwargs['username'] = self.request.user.username
-    #     else:
-    #         raise Http404
-    #     return super().dispatch(request, *args, **kwargs)
 
     def get_object(self, queryset=None):
         return self.request.user
