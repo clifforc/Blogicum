@@ -1,5 +1,5 @@
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.conf import settings
@@ -13,10 +13,10 @@ from .forms import PostForm, CommentForm, ProfileForm
 from .models import Post, Category, User, Comment
 
 
-class OnlyAuthorMixin(UserPassesTestMixin):
-    def test_func(self):
-        obj = self.get_object()
-        return obj.author == self.request.user
+# class OnlyAuthorMixin(UserPassesTestMixin):
+#     def test_func(self):
+#         obj = self.get_object()
+#         return obj.author == self.request.user
 
 
 class PostListView(ListView):
@@ -29,7 +29,7 @@ class PostListView(ListView):
         return Post.objects.published()
 
 
-class PostDetailView(DetailView):
+class PostDetailView(LoginRequiredMixin, DetailView):
     model = Post
     template_name = 'blog/detail.html'
     pk_url_kwarg = 'post_id'
@@ -40,14 +40,23 @@ class PostDetailView(DetailView):
         context['comments'] = self.object.comments.select_related('author')
         return context
 
-    def get_object(self, *args, **kwargs):
-        post = super().get_object(*args, **kwargs)
-        if post.author != self.request.user:
-            return get_object_or_404(
-                Post.objects.all(),
-                pk=self.kwargs['post_id']
-            )
-        return post
+    def get_object(self, queryset=None):
+        posts = Post.objects.filter(
+            Q(is_published=True, category__is_published=True,
+              pub_date__lt=timezone.now()) | Q(author=self.request.user))
+
+        return get_object_or_404(posts, pk=self.kwargs['post_id'])
+
+    # def get_object(self, *args, **kwargs):
+    #     post = super().get_object(*args, **kwargs)
+    #     if post.author != self.request.user:
+    #         return get_object_or_404(
+    #             Post.objects.filter(
+    #                 is_published=True,
+    #                 pub_date__lte=timezone.now()),
+    #             pk=self.kwargs['post_id']
+    #         )
+    #     return post
 
 
 class CategoryListView(ListView):
@@ -104,17 +113,17 @@ class ProfileListView(ListView):
             ).annotate(comment_count=Count('comments')).order_by('-pub_date')
 
 
-class ProfileUpdateView(OnlyAuthorMixin, UpdateView):
+class ProfileUpdateView(LoginRequiredMixin, UpdateView):
     model = User
     template_name = 'blog/user.html'
     form_class = ProfileForm
 
-    def dispatch(self, request, *args, **kwargs):
-        if self.request.user.is_authenticated:
-            self.kwargs['username'] = self.request.user.username
-        else:
-            raise Http404
-        return super().dispatch(request, *args, **kwargs)
+    # def dispatch(self, request, *args, **kwargs):
+    #     if self.request.user.is_authenticated:
+    #         self.kwargs['username'] = self.request.user.username
+    #     else:
+    #         raise Http404
+    #     return super().dispatch(request, *args, **kwargs)
 
     def get_object(self, queryset=None):
         return self.request.user
@@ -141,7 +150,10 @@ class PostCreateView(PostMixin, LoginRequiredMixin, CreateView):
                        kwargs={'username': self.request.user.username})
 
 
-class PostUpdateView(PostMixin, OnlyAuthorMixin, UpdateView):
+class PostUpdateView(PostMixin, UserPassesTestMixin, UpdateView):
+
+    def test_func(self):
+        return self.get_object().author == self.request.user
 
     def dispatch(self, request, *args, **kwargs):
         instance = get_object_or_404(Post, pk=kwargs['post_id'])
@@ -154,7 +166,11 @@ class PostUpdateView(PostMixin, OnlyAuthorMixin, UpdateView):
                             kwargs={'post_id': self.object.id})
 
 
-class PostDeleteView(PostMixin, OnlyAuthorMixin, DeleteView):
+class PostDeleteView(PostMixin, UserPassesTestMixin, DeleteView):
+
+    def test_func(self):
+        return self.get_object().author == self.request.user
+
     def dispatch(self, request, *args, **kwargs):
         instance = get_object_or_404(Post, pk=kwargs['post_id'])
         if instance.author != request.user:
@@ -168,7 +184,10 @@ class PostDeleteView(PostMixin, OnlyAuthorMixin, DeleteView):
         return context
 
     def get_success_url(self):
-        return reverse_lazy('blog:index')
+        return reverse(
+            'blog:profile',
+            kwargs={'username': self.request.user.username}
+        )
 
 
 class CommentCreateView(LoginRequiredMixin, CreateView):
