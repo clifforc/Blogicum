@@ -30,12 +30,7 @@ class PublishedPostManager(models.Manager):
         return self.get_queryset().published()
 
 
-class PublishedAndCreatedAtModel(models.Model):
-    is_published = models.BooleanField(
-        default=True,
-        verbose_name='Опубликовано',
-        help_text='Снимите галочку, чтобы скрыть публикацию.'
-    )
+class CreatedAtModel(models.Model):
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name='Добавлено'
@@ -46,7 +41,18 @@ class PublishedAndCreatedAtModel(models.Model):
         ordering = ('created_at', )
 
 
-class Category(PublishedAndCreatedAtModel):
+class IsPublishedModel(models.Model):
+    is_published = models.BooleanField(
+        default=True,
+        verbose_name='Опубликовано',
+        help_text='Снимите галочку, чтобы скрыть публикацию.'
+    )
+
+    class Meta:
+        abstract = True
+
+
+class Category(IsPublishedModel, CreatedAtModel):
     title = models.CharField(
         max_length=settings.MAX_FIELD_LENGTH,
         verbose_name='Заголовок'
@@ -67,7 +73,7 @@ class Category(PublishedAndCreatedAtModel):
         return self.title[:settings.REPRESENTATION_LENGTH]
 
 
-class Location(PublishedAndCreatedAtModel):
+class Location(CreatedAtModel):
     name = models.CharField(
         max_length=settings.MAX_FIELD_LENGTH,
         verbose_name='Название места'
@@ -81,7 +87,7 @@ class Location(PublishedAndCreatedAtModel):
         return self.name[:settings.REPRESENTATION_LENGTH]
 
 
-class Post(PublishedAndCreatedAtModel):
+class Post(IsPublishedModel, CreatedAtModel):
     title = models.CharField(
         max_length=settings.MAX_FIELD_LENGTH,
         verbose_name='Заголовок'
@@ -110,13 +116,12 @@ class Post(PublishedAndCreatedAtModel):
         null=True,
         verbose_name='Категория'
     )
-
-    objects = PublishedPostManager()
-
     image = models.ImageField(
         verbose_name='Картинка у публикации',
         blank=True
     )
+
+    objects = PublishedPostManager()
 
     class Meta:
         default_related_name = 'posts'
@@ -128,7 +133,7 @@ class Post(PublishedAndCreatedAtModel):
         return self.title[:settings.REPRESENTATION_LENGTH]
 
 
-class Comment(PublishedAndCreatedAtModel):
+class Comment(CreatedAtModel):
     author = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
