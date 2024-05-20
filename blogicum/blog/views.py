@@ -9,7 +9,8 @@ from django.views.generic import (
 )
 from django.urls import reverse_lazy, reverse
 
-from .forms import PostForm, CommentForm, ProfileForm
+from .forms import CommentForm, ProfileForm
+from .mixins import CommentMixin, PostMixin
 from .models import Post, Category, User, Comment
 
 
@@ -39,13 +40,6 @@ class PostDetailView(LoginRequiredMixin, DetailView):
         user_posts = Post.objects.filter(author=self.request.user)
         posts = published_posts | user_posts
         return get_object_or_404(posts, pk=self.kwargs['post_id'])
-
-
-class PostMixin:
-    model = Post
-    form_class = PostForm
-    template_name = 'blog/create.html'
-    pk_url_kwarg = 'post_id'
 
 
 class PostCreateView(PostMixin, LoginRequiredMixin, CreateView):
@@ -161,22 +155,6 @@ class CommentCreateView(LoginRequiredMixin, CreateView):
         form.instance.post = get_object_or_404(Post,
                                                pk=self.kwargs['post_id'])
         return super().form_valid(form)
-
-    def get_success_url(self):
-        return reverse_lazy('blog:post_detail',
-                            kwargs={'post_id': self.kwargs['post_id']})
-
-
-class CommentMixin:
-    model = Comment
-    template_name = 'blog/comment.html'
-    pk_url_kwarg = 'comment_id'
-
-    def dispatch(self, request, *args, **kwargs):
-        instance = get_object_or_404(Comment, id=kwargs['comment_id'])
-        if instance.author != request.user:
-            raise PermissionError
-        return super().dispatch(request, *args, **kwargs)
 
     def get_success_url(self):
         return reverse_lazy('blog:post_detail',
